@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#ff4405</color>
+    <color name="colorPrimaryDark">#f33826</color>
+    <color name="colorAccent">#d50a0a</color>
+    <color name="rider1">#ffffff</color>
+
+    <integer-array name="advance3_glyph_colors">
+        <item>@color/rider1</item>
+        <item>@color/rider1</item>
+        <item>@color/rider1</item>
+        <item>@color/rider1</item>
+        <item>@color/rider1</item>
+        <item>@color/rider1</item>
+        <item>@color/rider1</item>
+        <item>@color/rider1</item>
+        <item>@color/rider1</item>
+        <item>@color/rider1</item>
+        <item>@color/rider1</item>
+        <item>@color/rider1</item>
+        <item>@color/rider1</item>
+    </integer-array>
+</resources>
