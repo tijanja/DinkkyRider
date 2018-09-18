@@ -37,13 +37,16 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Dont have an account"
+                    android:text="Click here to"
                     android:textColor="#fa2133"/>
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text=" SignUp"/>
+                    android:text=" Sign-In"
+                    android:clickable="true"
+                    android:onClick="gotoSignin"
+                    android:textColor="#1e34a4"/>
 
             </LinearLayout>
 
@@ -104,7 +107,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_below="@+id/name"
-                    android:hint="Password"
+                    android:hint="Email"
                     android:layout_marginLeft="20dp"
                     android:layout_marginRight="20dp"
                     android:drawableLeft="@drawable/ic_mail_black_24dp"
@@ -117,17 +120,17 @@
                     android:hint="Phone"
                     android:layout_marginLeft="20dp"
                     android:layout_marginRight="20dp"
-                    android:drawableLeft="@drawable/ic_https_black_24dp"
+                    android:drawableLeft="@drawable/ic_phone_black_24dp"
                     android:drawablePadding="8dp"
                     android:id="@+id/customerPhone"/>
                 <EditText
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_below="@+id/customerPhone"
-                    android:hint="Password"
+                    android:hint="City"
                     android:layout_marginLeft="20dp"
                     android:layout_marginRight="20dp"
-                    android:drawableLeft="@drawable/ic_https_black_24dp"
+                    android:drawableLeft="@drawable/ic_place_black_24dp"
                     android:drawablePadding="8dp"
                     android:id="@+id/city"/>
                 <EditText
@@ -144,7 +147,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_below="@+id/password"
-                    android:hint="Password"
+                    android:hint="Confirm Password"
                     android:layout_marginLeft="20dp"
                     android:layout_marginRight="20dp"
                     android:drawableLeft="@drawable/ic_https_black_24dp"
@@ -176,7 +179,7 @@
                     android:clickable="true"
                     android:layout_marginLeft="20dp"
                     android:layout_marginRight="20dp"
-                    android:layout_marginBottom="8dp"
+                    android:layout_marginBottom="20dp"
                     android:layout_below="@id/terms"
                     android:foreground="?attr/selectableItemBackgroundBorderless"
                     >

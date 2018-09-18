@@ -1,9 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
-<fragment xmlns:android="http://schemas.android.com/apk/res/android"
+<android.support.design.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:map="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/map"
-    android:name="com.google.android.gms.maps.SupportMapFragment"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    tools:context=".MapsActivity" />
+    xmlns:tools="http://schemas.android.com/tools" android:layout_height="match_parent"
+    android:layout_width="match_parent">
+    <fragment
+        android:id="@+id/map"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        tools:context=".MapsActivity" />
+
+    <GridLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:columnCount="1"
+        android:rowCount="1"
+        >
+        <TextView
+            android:id="@+id/from_label"
+
+            android:text="Origin"
+            android:textColor="?android:textColorSecondary" />
+
+        <AutoCompleteTextView
+            android:id="@+id/from"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+
+            android:completionThreshold="3" />
+
+        <TextView
+            android:id="@+id/to_label"
+
+            android:text="origin"
+            android:textColor="?android:textColorSecondary" />
+
+        <AutoCompleteTextView
+            android:id="@+id/to"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+
+            android:completionThreshold="3" />
+
+        <Button
+            android:id="@+id/load_directions"
+           android:layout_height="wrap_content"
+            android:layout_width="match_parent"
+            android:text="My Location"/>
+    </GridLayout>
+
+</android.support.design.widget.CoordinatorLayout>
