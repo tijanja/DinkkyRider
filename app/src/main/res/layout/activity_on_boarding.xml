@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".OnBoardingActivity">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:layout_weight="1">
+
+        <android.support.v4.view.ViewPager
+            android:id="@+id/view_pager"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_above="@+id/indicator_wrapper" />
+
+        <TextView
+            android:id="@+id/slide_one_logo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="DinkkyRidder"
+            android:textColor="#ffffff"
+            android:textSize="35sp"
+            android:layout_marginTop="80dp"
+            android:layout_gravity="center_horizontal"/>
+
+        <com.viewpagerindicator.CirclePageIndicator
+            android:id="@+id/indicator"
+            android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:layout_marginBottom="150dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:padding="5dp"
+            app:radius="8dp"
+            />
+
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+            android:background="@drawable/round_button_drawable"
+            android:layout_marginTop="15dp"
+            android:layout_gravity="bottom|center_horizontal"
+            android:id="@+id/skip"
+            android:clickable="true"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
+            android:layout_marginBottom="50dp"
+            >
+
+            <TextView
+                android:id="@+id/nextText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:fontFamily="sans-serif-condensed"
+                android:text="Skip"
+                android:textColor="@color/colorPrimary"
+                android:textSize="20sp"
+                android:textStyle="normal" />
+
+            <ProgressBar
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:id="@+id/progress"
+                android:visibility="gone"/>
+
+        </FrameLayout>
+
+    </FrameLayout>
+
+</android.support.constraint.ConstraintLayout>

@@ -40,7 +40,7 @@ public class WelcomeActivity extends AppCompatActivity {
                         @Override
                         public void run() {
 
-                            Intent intent = new Intent(WelcomeActivity.this,LoginActivity.class);
+                            Intent intent = new Intent(WelcomeActivity.this,OnBoardingActivity.class);
                             WelcomeActivity.this.startActivity(intent);
 
                         }
