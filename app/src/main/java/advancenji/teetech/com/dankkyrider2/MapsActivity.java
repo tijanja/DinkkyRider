@@ -1,15 +1,21 @@
 package advancenji.teetech.com.dankkyrider2;
 
 import android.Manifest;
+import android.animation.Animator;
+import android.animation.ValueAnimator;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.location.Location;
+import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Handler;
+import android.provider.ContactsContract;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
+import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
@@ -19,9 +25,14 @@ import android.support.v7.widget.CardView;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.view.animation.LinearInterpolator;
 import android.widget.AutoCompleteTextView;
+import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -46,15 +57,21 @@ import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.ButtCap;
 import com.google.android.gms.maps.model.CameraPosition;
+import com.google.android.gms.maps.model.Cap;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.maps.model.RoundCap;
+import com.google.android.gms.maps.model.SquareCap;
 import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.api.client.extensions.android.http.AndroidHttp;
@@ -68,6 +85,15 @@ import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.JsonObjectParser;
 import com.google.api.client.json.jackson.JacksonFactory;
 import com.google.api.client.util.Key;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.ChildEventListener;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.Query;
+import com.google.firebase.database.ValueEventListener;
 import com.google.maps.android.PolyUtil;
 
 
@@ -77,10 +103,20 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import advancenji.teetech.com.dankkyrider2.driver.Driver;
 import advancenji.teetech.com.dankkyrider2.helper.PlayerConfig;
 import advancenji.teetech.com.dankkyrider2.helper.Utils;
+import advancenji.teetech.com.dankkyrider2.model.Address;
+import advancenji.teetech.com.dankkyrider2.model.Coordinate;
+import advancenji.teetech.com.dankkyrider2.model.LandMark;
+import advancenji.teetech.com.dankkyrider2.model.SharedValues;
+import advancenji.teetech.com.dankkyrider2.model.Trip;
+import advancenji.teetech.com.dankkyrider2.model.User;
 
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, LocationListener {
@@ -92,8 +128,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private static final int PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 2;
     boolean mLocationPermissionGranted = false;
 
-    private static final float DEFAULT_ZOOM = 15.5f;
+    public ProgressBar dialogProgress;
+
+    public static final float DEFAULT_ZOOM = 15.5f;
     Location mLastKnownLocation;
+
+    DatabaseReference dRef;
 
     boolean moveCam = true;
 
@@ -124,21 +164,41 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private Task locationResult;
     private String url;
 
+    FrameLayout next;
+    Driver driver;
+
+    int mMeasuredWidth=0;
+    private User user;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,WindowManager.LayoutParams.FLAG_FULLSCREEN);
         setContentView(R.layout.activity_maps);
+
+
+        dialogProgress = findViewById(R.id.dialogProgress);
+        dialogProgress.setVisibility(View.GONE);
+
+
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
+        FirebaseUser firebaseUser = FirebaseAuth.getInstance().getCurrentUser();
+
         getLocationPermission();
+
 
 
         paymentPane = findViewById(R.id.paymentPane);
 
+//        ViewGroup.LayoutParams layoutParams  = (ViewGroup.LayoutParams) paymentPane.getLayoutParams();
+//        layoutParams.height=0;
+//
+//        paymentPane.setLayoutParams(layoutParams);
 
         mGeoDataClient = Places.getGeoDataClient(this);
 
@@ -148,6 +208,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         // Construct a FusedLocationProviderClient.
         mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
 
+
         from = (TextView) findViewById(R.id.from);
         to = (TextView) findViewById(R.id.to);
 
@@ -155,12 +216,262 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         priceRang = findViewById(R.id.priceRang);
         addressBox = findViewById(R.id.addressBox);
 
+        next = findViewById(R.id.requestRide);
+
+        FirebaseDatabase firebaseDatabase = FirebaseDatabase.getInstance();
+        dRef = firebaseDatabase.getReference("dinkky");
+
+        dRef.child("Customers").child(firebaseUser.getUid()).addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                user = dataSnapshot.getValue(User.class);
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+
+            }
+        });
+
+
+        next.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mMeasuredWidth = Utils.startButtonAnim(MapsActivity.this,next);
+
+                String url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?key="+PlayerConfig.API_KEY+"&location="+latLngFrom.latitude+","+latLngFrom.longitude+"&radius=2000&type=restaurant";
+
+                Log.i("landmark",url);
+
+                Utils.httpGetConnection(url, new advancenji.teetech.com.dankkyrider2.helper.HttpResponse() {
+                    @Override
+                    public void success(String response) {
+
+
+                        try {
+                            JSONObject jsonObject = new JSONObject(response);
+
+                            if(jsonObject != null && jsonObject.has("results"))
+                            {
+                                JSONArray resultsArray = jsonObject.getJSONArray("results");
+
+                                int landMarkNum = resultsArray.length();
+
+                                if(landMarkNum > 5) {
+                                    landMarkNum = 5; //Limit to display only 5 cars max
+                                }
+
+
+                                Location location = null;
+                                JSONObject resultObject = null;
+                                List<String> landMarks = new ArrayList<>();
+
+                                final Trip trip = new Trip();
+
+                                for(int i = 0; i < landMarkNum; i++)
+                                {
+                                    resultObject = resultsArray.getJSONObject(i);
+                                    if(resultObject != null && resultObject.has("geometry")) {
+                                        JSONObject locationObject = resultObject.getJSONObject("geometry").getJSONObject("location");
+
+                                        LandMark landMark = new LandMark();
+                                        landMark.setLat(locationObject.getDouble("lat"));
+                                        landMark.setLng(locationObject.getDouble("lng"));
+                                        landMark.setPlaceId(resultObject.getString("place_id"));
+
+                                        trip.setLandMarks(landMark);
+
+                                    }
+                                }
+
+                                Address pickUp = new Address();
+                                pickUp.setLat(latLngFrom.latitude);
+                                pickUp.setLng(latLngFrom.longitude);
+
+
+                                Address dropOff = new Address();
+                                dropOff.setLat(latLngTO.latitude);
+                                dropOff.setLng(latLngTO.longitude);
+
+                                trip.setPickup(pickUp);
+                                trip.setDrop(dropOff);
+
+                                trip.setUser(user);
+
+
+                                trip.setId(dRef.push().getKey());
+
+                                dRef.child("trip").child(trip.getId()).setValue(trip).addOnCompleteListener(new OnCompleteListener<Void>() {
+                                    @Override
+                                    public void onComplete(@NonNull Task<Void> task) {
+                                        if(task.isSuccessful())
+                                        {
+
+                                            SharedValues.saveValue(getBaseContext(),PlayerConfig.TRIP_ID,trip.getId());
+
+
+
+                                            dRef.child("trip").child(trip.getId()).addValueEventListener(new ValueEventListener() {
+                                                @Override
+                                                public void onDataChange(@NonNull DataSnapshot d) {
+
+                                                    if(d.hasChild("driver"))
+                                                    {
+                                                        Log.i("onDataChange",d.child("driverToUserPoints").getValue().toString() );
+                                                        String points = d.child("driverToUserPoints").getValue().toString();
+                                                        LatLng driverPoint = new LatLng((Double) d.child("driver/coordinate/location/latitude").getValue(),(Double)d.child("driver/coordinate/location/longitude").getValue());
+                                                        LatLng userPoint = new LatLng((Double)d.child("pickup/lat").getValue(),(Double)d.child("pickup/lng").getValue());
+                                                        drawDrivePath(points,driverPoint,userPoint);
+
+                                                    }
+                                                }
+
+                                                @Override
+                                                public void onCancelled(@NonNull DatabaseError databaseError) {
+
+                                                }
+                                            });
+
+//                                            dRef.child("trip").child(trip.getId()).addChildEventListener(new ChildEventListener() {
+//                                                @Override
+//                                                public void onChildAdded(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
+//                                                    Log.i("ChildAdded",dataSnapshot.getValue().toString());
+//                                                }
+//
+//                                                @Override
+//                                                public void onChildChanged(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
+//
+//                                                    Utils.stopButtonAnim(MapsActivity.this,next,mMeasuredWidth);
+//
+//                                                    ValueAnimator m1 = ValueAnimator.ofFloat((float) 2, (float)7);
+//                                                    m1.setDuration(500);
+//                                                    m1.setInterpolator(new LinearInterpolator());
+//                                                    m1.addUpdateListener(new ValueAnimator.AnimatorUpdateListener()
+//                                                    {
+//                                                        @Override
+//                                                        public void onAnimationUpdate(ValueAnimator animation)
+//                                                        {
+//                                                            float val = (float) animation.getAnimatedValue();
+//                                                            ((LinearLayout.LayoutParams) paymentPane.getLayoutParams()).weight = val;
+//                                                            paymentPane.requestLayout();
+//                                                            paymentPane.findViewById(R.id.trip_price_view).setVisibility(View.INVISIBLE);
+//                                                            paymentPane.findViewById(R.id.driverDetails).setVisibility(View.VISIBLE);
+//
+//                                                            //getMapsApiDirectionsUrl();
+//                                                        }
+//                                                    });
+//                                                    m1.start();
+//
+//                                                    for(DataSnapshot d : dataSnapshot.getChildren()) {
+////                                                        if(d.hasChild("driver"))
+////                                                        {
+//
+//                                                        Log.i("frank",d.getValue().toString() );
+//
+//
+//
+//                                                       // }
+//
+//                                                    }
+//
+////
+//
+//                                                }
+//
+//                                                @Override
+//                                                public void onChildRemoved(@NonNull DataSnapshot dataSnapshot) {
+//
+//                                                }
+//
+//                                                @Override
+//                                                public void onChildMoved(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
+//
+//                                                }
+//
+//                                                @Override
+//                                                public void onCancelled(@NonNull DatabaseError databaseError) {
+//
+//                                                }
+//                                            });
+
+//                                            DatabaseReference dataRef = FirebaseDatabase.getInstance().getReference("dinkky");
+//                                            Query queryRef = dataRef.orderByChild("coordinate");//.orderByChild("landMark").equalTo(trip.getPickup().getCoordinate().getLandMark().get(0));
+////                                            queryRef.addChildEventListener(new ChildEventListener() {
+////                                                @Override
+////                                                public void onChildAdded(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
+////
+////                                                    Utils.stopButtonAnim(MapsActivity.this,next,mMeasuredWidth);
+////
+////                                                    System.out.print(dataSnapshot.getValue());
+////                                                }
+////
+////                                                @Override
+////                                                public void onChildChanged(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
+////
+////                                                }
+////
+////                                                @Override
+////                                                public void onChildRemoved(@NonNull DataSnapshot dataSnapshot) {
+////
+////                                                }
+////
+////                                                @Override
+////                                                public void onChildMoved(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
+////
+////                                                }
+////
+////                                                @Override
+////                                                public void onCancelled(@NonNull DatabaseError databaseError) {
+////
+////                                                }
+////                                            });
+//                                            queryRef.addValueEventListener(new ValueEventListener() {
+//                                                @Override
+//                                                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+//                                                    Utils.stopButtonAnim(MapsActivity.this,next,mMeasuredWidth);
+//                                                    System.out.print(dataSnapshot.getValue());
+//                                                }
+//
+//                                                @Override
+//                                                public void onCancelled(@NonNull DatabaseError databaseError) {
+//                                                    System.out.print(databaseError.getMessage());
+//                                                }
+//                                            });
+                                        }
+                                    }
+                                }).addOnFailureListener(new OnFailureListener() {
+                                    @Override
+                                    public void onFailure(@NonNull Exception e) {
+
+                                        Utils.alert(MapsActivity.this,e.getMessage());
+                                    }
+                                });
+
+
+                                if(landMarkNum == 0) {
+                                    //showSnackBar(getString(R.string.no_cars_available), false);
+                                }
+                            }
+
+                        } catch(Exception e) {
+                            Log.i("tttttttt", "NearBySearch Api error", e);
+                        }
+
+                    }
+
+                    @Override
+                    public void fail(String error) {
+
+                    }
+                });
+            }
+        });
+
 
 
         try {
 
             AutocompleteFilter typeFilter = new AutocompleteFilter.Builder()
-
                     .setCountry("NG")
                     .build();
 
@@ -207,10 +518,37 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     public void onMapReady(GoogleMap googleMap) {
 
         mMap = googleMap;
+        mMap.setMapStyle(MapStyleOptions.loadRawResourceStyle(this, R.raw.mapstyle_night));
 
         //mMap.setMyLocationEnabled(true);
 
-        getPreviousLocation();
+        //getDriversInMyLocation();
+
+        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+
+        if(locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER))
+        {
+            getPreviousLocation();
+        }
+        else
+        {
+            Utils.alert(this, "Dinkky need the Location Manager enabled", "Location Manager Settings", "Enable", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Utils.closeAlert();
+                }
+            }, new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                    startActivityForResult(intent,3);
+                    Utils.closeAlert();
+                }
+            });
+
+        }
+
+
 
 //
 //        Task<PlaceLikelihoodBufferResponse> placeResult = mPlaceDetectionClient.getCurrentPlace(null);
@@ -253,6 +591,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
 
     private void  getMapsApiDirectionsUrl(LatLng origin,LatLng dest) {
+        dialogProgress.setVisibility(View.VISIBLE);
         new AsyncDownload(origin,dest).execute();
     }
 
@@ -321,63 +660,50 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         protected void onPostExecute(DirectionsResult directionsResult) {
 
+            dialogProgress.setVisibility(View.GONE);
             moveCam=false;
 
             String encodedPoints = directionsResult.routes.get(0).overviewPolyLine.points;
 
             Log.i("direction",directionsResult.routes.get(0).legs.get(0).distance.text);
 
-            disTime.setText(directionsResult.routes.get(0).legs.get(0).duration.text+" / "+directionsResult.routes.get(0).legs.get(0).distance.text);
+            disTime.setText(directionsResult.routes.get(0).legs.get(0).duration.text+" - "+directionsResult.routes.get(0).legs.get(0).distance.text);
 
             priceRang.setText(Utils.formatPrice(getPriceRange(directionsResult.routes.get(0).legs.get(0).duration.value,directionsResult.routes.get(0).legs.get(0).distance.value)+"")+"/"+Utils.formatPrice(getPriceRangeForTraffic(directionsResult.routes.get(0).legs.get(0).durationInTraffic.value,directionsResult.routes.get(0).legs.get(0).distance.value)+""));
 
-            latLngs = PolyUtil.decode(encodedPoints);
-            polylines = new PolylineOptions()
-                    .addAll(latLngs)
-                    .color(Color.BLACK)
-                    .width(8)
-                    .endCap(new RoundCap());
+            drawDrivePath(encodedPoints,latLngFrom,latLngTO);
 
-            mMap.addPolyline(polylines);
+            ((LinearLayout.LayoutParams) paymentPane.getLayoutParams()).weight=(float)8;
 
-            addressBox.setVisibility(View.GONE);
-
-            LatLngBounds.Builder builder = new LatLngBounds.Builder();
-            for(int i=0;i<latLngs.size();i++)
-            {
-                builder.include(latLngs.get(i));
-            }
-
-
-            //mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLngTO, 10.50f),2000,null);
-            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 200),2000,null);
-
-            mMap.setInfoWindowAdapter(new MapInfoWindowAdapter(MapsActivity.this));
-
-            MarkerOptions markerOptions = new MarkerOptions().title(destination).position(latLngTO).snippet("gggggggg").infoWindowAnchor(0.1f, 0.2f);
-
-            MarkerOptions markerOptionsFromLocat = new MarkerOptions().title(destination).position(latLngFrom).snippet("gggggggg").infoWindowAnchor(-3.5f, 0.9f);
-
-
-
-
-            Marker marker = mMap.addMarker(markerOptions);
-            marker.showInfoWindow();
-
-            Marker markerFromLocate = mMap.addMarker(markerOptionsFromLocat);
-            //markerFromLocate.showInfoWindow();
-
-
-            mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
+            ValueAnimator m1 = ValueAnimator.ofFloat((float) 8, (float)2.5);
+            m1.setDuration(300);
+            m1.setInterpolator(new LinearInterpolator());
+            m1.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                 @Override
-                public void onInfoWindowClick(Marker marker) {
-                    mMap.clear();
-                    startActivityForResult(intent, 2);
+                public void onAnimationUpdate(ValueAnimator animation) {
+                    paymentPane.setVisibility(View.VISIBLE);
+                    float val = (float) animation.getAnimatedValue();
+                    ((LinearLayout.LayoutParams) paymentPane.getLayoutParams()).weight = val;
+                    paymentPane.requestLayout();
+                    paymentPane.findViewById(R.id.trip_price_view).setVisibility(View.VISIBLE);
+
                 }
             });
-            paymentPane.setVisibility(View.VISIBLE);
-            paymentPane.invalidate();
 
+            m1.start();
+
+//            ValueAnimator valueAnimator = ValueAnimator.ofInt(0,ViewGroup.LayoutParams.MATCH_PARENT);
+//            valueAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+//                @Override
+//                public void onAnimationUpdate(ValueAnimator animation) {
+//                    int val = (Integer) animation.getAnimatedValue();
+//                    ViewGroup.LayoutParams layoutParams = paymentPane.getLayoutParams();
+//                    layoutParams.width = val;
+//                    paymentPane.requestLayout();
+//                }
+//            });
+//            valueAnimator.setDuration(15000);
+//            valueAnimator.start();
             isDestinationSet=true;
 
 
@@ -496,7 +822,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                         from.setText(place.getName());
                         from.invalidate();
-                //Log.i("place", "Place: " + );
+                latLngFrom = place.getLatLng();
             }
             else if (resultCode == PlaceAutocomplete.RESULT_ERROR)
             {
@@ -550,15 +876,19 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             }
         }
 
+        if (requestCode == 3)
+        {
+            if (resultCode == RESULT_OK)
+            {
+                getPreviousLocation();
+            }
+        }
+
 
     }
 
     private void getLocationPermission() {
-        /*
-         * Request location permission, so that we can get the location of the
-         * device. The result of the permission request is handled by a callback,
-         * onRequestPermissionsResult.
-         */
+
         if (ContextCompat.checkSelfPermission(this.getApplicationContext(), android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
         {
             mLocationPermissionGranted = true;
@@ -761,6 +1091,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     {
         if(isDestinationSet)
         {
+            Utils.stopButtonAnim(this,next,mMeasuredWidth);
             mMap.clear();
             //latLngFrom = new LatLng(mLastKnownLocation.getLatitude(), mLastKnownLocation.getLongitude());
             //mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLngFrom, DEFAULT_ZOOM));
@@ -778,6 +1109,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             paymentPane.invalidate();
             isDestinationSet = false;
 
+
         }
         else
         {
@@ -790,12 +1122,209 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     public void getPreviousLocation()
     {
+        dialogProgress.setVisibility(View.VISIBLE);
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
 
-            //mMap.setMyLocationEnabled(true);
-            mMap.setBuildingsEnabled(true);
+            locationResult = mFusedLocationProviderClient.getLastLocation()
+            .addOnCompleteListener(new OnCompleteListener<Location>() {
+                @Override
+                public void onComplete(@NonNull Task<Location> task) {
 
-            locationResult = mFusedLocationProviderClient.getLastLocation();
+                    if(task.isSuccessful() && task.getResult() !=null)
+                    {
+                        mLastKnownLocation = task.getResult();
+
+
+                        getLandMark(mLastKnownLocation);
+                        String url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=" + mLastKnownLocation.getLatitude() + "," + mLastKnownLocation.getLongitude() + "&key=" + PlayerConfig.API_KEY;
+
+                        Utils.httpGetConnection(url, new advancenji.teetech.com.dankkyrider2.helper.HttpResponse() {
+                            @Override
+                            public void success(String response) {
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        dialogProgress.setVisibility(View.GONE);
+                                    }
+                                });
+
+                                Log.i("geoLocation-response-2", response);
+
+                                try {
+
+                                    JSONObject jsonObject = new JSONObject(response);
+                                    JSONArray jsonArray = jsonObject.getJSONArray("results");
+                                    if (jsonArray.length() != 0) {
+                                        JSONObject resultObj = jsonArray.getJSONObject(0);
+                                        JSONArray addressComp = resultObj.getJSONArray("address_components");
+                                        //updateUi(resultObj.getString("formatted_address"));
+                                        updateUi(addressComp.getJSONObject(0).getString("short_name") + " " + addressComp.getJSONObject(1).getString("short_name")/*+" "+addressComp.getJSONObject(2).getString("long_name")*/);
+                                    } else {
+                                        Log.i("error", "You have exceeded your daily request quota for this API. If you did not set a custom daily request quota, verify your project has an active billing account");
+                                    }
+
+
+                                } catch (JSONException e) {
+                                    e.printStackTrace();
+                                }
+
+                            }
+
+                            @Override
+                            public void fail(String error) {
+                                Log.e("fail-error", error);
+                            }
+                        });
+
+                        latLngFrom = new LatLng(mLastKnownLocation.getLatitude(), mLastKnownLocation.getLongitude());
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLngFrom, DEFAULT_ZOOM));
+                        CameraPosition cameraPosition = mMap.getCameraPosition();
+                        mMap.addMarker(new MarkerOptions().position(new LatLng(cameraPosition.target.latitude, cameraPosition.target.longitude)).draggable(true).snippet("Please move the marker if needed.").icon(BitmapDescriptorFactory.fromResource(R.drawable.map_marker_with_a_person_shape_png)));
+
+                    }
+                    else
+                    {
+                        Utils.alert(MapsActivity.this,"Dinkky can't pick your location");
+                    }
+
+                }
+            });
+
+//            if(locationResult.isSuccessful())
+//            {
+//            locationResult.addOnSuccessListener(new OnSuccessListener() {
+//                @Override
+//                public void onSuccess(Object o) {
+//
+//                    mLastKnownLocation = (Location) o;
+//                    getLandMark(mLastKnownLocation);
+//                    String url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=" + mLastKnownLocation.getLatitude() + "," + mLastKnownLocation.getLongitude() + "&key=" + PlayerConfig.API_KEY;
+//
+//                    Utils.httpGetConnection(url, new advancenji.teetech.com.dankkyrider2.helper.HttpResponse() {
+//                        @Override
+//                        public void success(String response) {
+//                            Log.i("geoLocation-response-2", response);
+//
+//                            try {
+//
+//                                JSONObject jsonObject = new JSONObject(response);
+//                                JSONArray jsonArray = jsonObject.getJSONArray("results");
+//                                if (jsonArray.length() != 0) {
+//                                    JSONObject resultObj = jsonArray.getJSONObject(0);
+//                                    JSONArray addressComp = resultObj.getJSONArray("address_components");
+//                                    //updateUi(resultObj.getString("formatted_address"));
+//                                    updateUi(addressComp.getJSONObject(0).getString("short_name") + " " + addressComp.getJSONObject(1).getString("short_name")/*+" "+addressComp.getJSONObject(2).getString("long_name")*/);
+//                                } else {
+//                                    Log.i("error", "You have exceeded your daily request quota for this API. If you did not set a custom daily request quota, verify your project has an active billing account");
+//                                }
+//
+//
+//                            } catch (JSONException e) {
+//                                e.printStackTrace();
+//                            }
+//
+//                        }
+//
+//                        @Override
+//                        public void fail(String error) {
+//                            Log.e("fail-error", error);
+//                        }
+//                    });
+//
+//                    latLngFrom = new LatLng(mLastKnownLocation.getLatitude(), mLastKnownLocation.getLongitude());
+//                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLngFrom, DEFAULT_ZOOM));
+//                    CameraPosition cameraPosition = mMap.getCameraPosition();
+//                    mMap.addMarker(new MarkerOptions().position(new LatLng(cameraPosition.target.latitude, cameraPosition.target.longitude)).draggable(true).snippet("Please move the marker if needed.").icon(BitmapDescriptorFactory.fromResource(R.drawable.map_marker_with_a_person_shape_png)));
+//
+//                    // mMap.addMarker(new MarkerOptions().position(new LatLng(driver.getmLat(),driver.getmLng())).draggable(true).snippet("Please move the marker if needed.").icon(BitmapDescriptorFactory.fromResource(R.drawable.placeholder)));
+//                }
+//            });
+//
+//
+//            mMap.setOnCameraMoveStartedListener(new GoogleMap.OnCameraMoveStartedListener() {
+//                @Override
+//                public void onCameraMoveStarted(int i) {
+//
+//                    CameraPosition cameraPosition = mMap.getCameraPosition();
+//                    url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=" + cameraPosition.target.latitude + "," + cameraPosition.target.longitude + "&key=" + PlayerConfig.API_KEY;
+//
+//
+//                }
+//            });
+//
+//
+//            mMap.setOnCameraIdleListener(new GoogleMap.OnCameraIdleListener() {
+//                @Override
+//                public void onCameraIdle() {
+//
+//                    Utils.httpGetConnection(url, new advancenji.teetech.com.dankkyrider2.helper.HttpResponse() {
+//                        @Override
+//                        public void success(String response) {
+//                            Log.i("geoLocation-response-1", response);
+//
+//                            try {
+//
+//                                JSONObject jsonObject = new JSONObject(response);
+//                                JSONArray jsonArray = jsonObject.getJSONArray("results");
+//                                if (jsonArray.length() != 0) {
+//                                    JSONObject resultObj = jsonArray.getJSONObject(0);
+//                                    JSONArray addressComp = resultObj.getJSONArray("address_components");
+//                                    //updateUi(resultObj.getString("formatted_address"));
+//                                    updateUi(addressComp.getJSONObject(0).getString("long_name") + " " + addressComp.getJSONObject(1).getString("long_name") + " " + addressComp.getJSONObject(2).getString("long_name"));
+//
+//                                } else {
+//                                    Log.i("error", "You have exceeded your daily request quota for this API. If you did not set a custom daily request quota, verify your project has an active billing account");
+//                                }
+//
+//
+//                            } catch (JSONException e) {
+//                                e.printStackTrace();
+//                            }
+//
+//                        }
+//
+//                        @Override
+//                        public void fail(String error) {
+//
+//                        }
+//                    });
+//                    // mMap.addMarker(new MarkerOptions().position(new LatLng(driver.getmLat(),driver.getmLng())).draggable(true).snippet("Please move the marker if needed.").icon(BitmapDescriptorFactory.fromResource(R.drawable.placeholder)));
+//                }
+//            });
+//
+//
+//            mMap.setOnCameraMoveListener(new GoogleMap.OnCameraMoveListener() {
+//                @Override
+//                public void onCameraMove() {
+//
+//                    if (moveCam) {
+//                        mMap.clear();
+//                        CameraPosition cameraPosition = mMap.getCameraPosition();
+//                        mMap.addMarker(new MarkerOptions().position(new LatLng(cameraPosition.target.latitude, cameraPosition.target.longitude)).draggable(true).snippet("Please move the marker if needed.").icon(BitmapDescriptorFactory.fromResource(R.drawable.map_marker_with_a_person_shape_png)));
+//
+//                    }
+//
+//                }
+//            });
+//
+//        }
+//        else
+//            {
+//                Utils.alert(this,"Dinkky can't pick your location");
+//            }
+//            }
+//            else
+//            {
+//                Log.e("error","cant get location");
+//            }
+
+
+
+
+
+
+
+
 
 //            PendingIntent pendingIntent = PendingIntent.getService(this,PendingIntent.FLAG_UPDATE_CURRENT,new Intent(),1);
 //            mFusedLocationProviderClient.requestLocationUpdates(LocationRequest.create(),pendingIntent).addOnCompleteListener(new OnCompleteListener<Void>() {
@@ -850,54 +1379,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 //                }
 //            });
 
-            locationResult.addOnSuccessListener(new OnSuccessListener() {
-                @Override
-                public void onSuccess(Object o) {
 
-                    mLastKnownLocation = (Location) (Location)o;
-                    String url = "https://maps.googleapis.com/maps/api/geocode/json?latlng="+mLastKnownLocation.getLatitude()+","+mLastKnownLocation.getLongitude()+"&key="+ PlayerConfig.API_KEY;
-
-                    Utils.httpGetConnection(url, new advancenji.teetech.com.dankkyrider2.helper.HttpResponse() {
-                        @Override
-                        public void success(String response) {
-                            Log.i("geoLocation-response-2",response);
-
-                            try {
-
-                                JSONObject jsonObject = new JSONObject(response);
-                                JSONArray jsonArray = jsonObject.getJSONArray("results");
-                                if(jsonArray.length()!=0)
-                                {
-                                    JSONObject resultObj = jsonArray.getJSONObject(0);
-                                    JSONArray  addressComp = resultObj.getJSONArray("address_components");
-                                    //updateUi(resultObj.getString("formatted_address"));
-                                    updateUi(addressComp.getJSONObject(0).getString("short_name")+" "+addressComp.getJSONObject(1).getString("short_name")/*+" "+addressComp.getJSONObject(2).getString("long_name")*/);
-                                }
-                                else
-                                {
-                                    Log.i("error","You have exceeded your daily request quota for this API. If you did not set a custom daily request quota, verify your project has an active billing account");
-                                }
-
-
-                            } catch (JSONException e) {
-                                e.printStackTrace();
-                            }
-
-                        }
-
-                        @Override
-                        public void fail(String error) {
-                            Log.e("fail-error",error);
-                        }
-                    });
-
-                    latLngFrom = new LatLng(mLastKnownLocation.getLatitude(), mLastKnownLocation.getLongitude());
-                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLngFrom, DEFAULT_ZOOM));
-                    CameraPosition cameraPosition = mMap.getCameraPosition();
-                    mMap.addMarker(new MarkerOptions().position(new LatLng(cameraPosition.target.latitude,cameraPosition.target.longitude)).draggable(true).snippet("Please move the marker if needed.").icon(BitmapDescriptorFactory.fromResource(R.drawable.map_marker_with_a_person_shape_png)));
-
-                }
-            });
 
 //            locationResult.addOnCompleteListener(this,new OnCompleteListener() {
 //                @Override
@@ -995,73 +1477,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 //                }
 //            });
 
-            mMap.setOnCameraMoveListener(new GoogleMap.OnCameraMoveListener() {
-                @Override
-                public void onCameraMove() {
-
-                    if(moveCam)
-                    {
-                        mMap.clear();
-                        CameraPosition cameraPosition = mMap.getCameraPosition();
-                        mMap.addMarker(new MarkerOptions().position(new LatLng(cameraPosition.target.latitude,cameraPosition.target.longitude)).draggable(true).snippet("Please move the marker if needed.").icon(BitmapDescriptorFactory.fromResource(R.drawable.map_marker_with_a_person_shape_png)));
-
-                    }
-
-                }
-            });
-
-            mMap.setOnCameraMoveStartedListener(new GoogleMap.OnCameraMoveStartedListener() {
-                @Override
-                public void onCameraMoveStarted(int i) {
-
-                    CameraPosition cameraPosition = mMap.getCameraPosition();
-                    url = "https://maps.googleapis.com/maps/api/geocode/json?latlng="+cameraPosition.target.latitude+","+cameraPosition.target.longitude+"&key="+ PlayerConfig.API_KEY;
 
 
-                }
-            });
 
 
-            mMap.setOnCameraIdleListener(new GoogleMap.OnCameraIdleListener() {
-                @Override
-                public void onCameraIdle() {
-
-                    Utils.httpGetConnection(url, new advancenji.teetech.com.dankkyrider2.helper.HttpResponse() {
-                        @Override
-                        public void success(String response) {
-                            Log.i("geoLocation-response-1",response);
-
-                            try {
-
-                                JSONObject jsonObject = new JSONObject(response);
-                                JSONArray jsonArray = jsonObject.getJSONArray("results");
-                                if(jsonArray.length()!=0)
-                                {
-                                    JSONObject resultObj = jsonArray.getJSONObject(0);
-                                    JSONArray  addressComp = resultObj.getJSONArray("address_components");
-                                    //updateUi(resultObj.getString("formatted_address"));
-                                    updateUi(addressComp.getJSONObject(0).getString("long_name")+" "+addressComp.getJSONObject(1).getString("long_name")+" "+addressComp.getJSONObject(2).getString("long_name"));
-
-                                }
-                                else
-                                {
-                                    Log.i("error","You have exceeded your daily request quota for this API. If you did not set a custom daily request quota, verify your project has an active billing account");
-                                }
-
-
-                            } catch (JSONException e) {
-                                e.printStackTrace();
-                            }
-
-                        }
-
-                        @Override
-                        public void fail(String error) {
-
-                        }
-                    });
-                }
-            });
 
 //            mMap.setOnCameraMoveListener(new GoogleMap.OnCameraMoveListener() {
 //                @Override
@@ -1110,6 +1529,180 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         else {
             ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION}, PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION);
         }
+    }
+
+    public void getDriversInMyLocation(final List<LandMark> landMarks)
+    {
+
+        DatabaseReference dRef = FirebaseDatabase.getInstance().getReference("dinkky");
+        dRef.child("onlineDrivers").addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+
+                if(dataSnapshot.exists())
+                {
+                    for(DataSnapshot ds : dataSnapshot.getChildren())
+                    {
+//                    Log.i("driver-online",ds.getValue().toString());
+
+                        LandMark driverLandMark = ds.child("landMark").getValue(LandMark.class);
+
+
+                        for(int j=0;j<landMarks.size();j++)
+                        {
+                            LandMark landMark = landMarks.get(j);
+
+                            if(driverLandMark !=null && driverLandMark.getPlaceId().equalsIgnoreCase(landMark.getPlaceId()))
+                            {
+                                showRiderInLocation(driverLandMark);
+                            }
+                        }
+
+//                        if(landMarkId.equalsIgnoreCase(landMark.getPlaceId()))
+//                        {
+
+                        // }
+
+
+
+                    }
+                }
+
+
+//                Log.i("snapshot-key",dataSnapshot.getKey());
+                //Driver driver = dataSnapshot.getValue(Driver.class);
+                //Log.i("driver-landMark",driver.getCoordinate().getLandMark());
+                //System.out.print(driver.toString());
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+
+            }
+        });
+
+    }
+
+
+    public void getLandMark(Location location)
+    {
+        String url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?key="+PlayerConfig.API_KEY+"&location="+location.getLatitude()+","+location.getLongitude()+"&radius=1000&type=restaurant";
+
+        Utils.httpGetConnection(url, new advancenji.teetech.com.dankkyrider2.helper.HttpResponse() {
+            @Override
+            public void success(String response) {
+
+                Location location = null;
+                JSONObject resultObject = null;
+                List<LandMark> landMarks = new ArrayList<>();
+                try {
+                    JSONObject jsonObject = new JSONObject(response);
+                    if(jsonObject != null && jsonObject.has("results"))
+                    {
+                        JSONArray resultsArray = jsonObject.getJSONArray("results");
+
+                        for(int i=0;i<resultsArray.length();i++)
+                        {
+                            resultObject = resultsArray.getJSONObject(i);
+
+                            if(resultObject != null && resultObject.has("geometry"))
+                            {
+                                JSONObject locationObject = resultObject.getJSONObject("geometry").getJSONObject("location");
+
+                                LandMark landMark = new LandMark();
+                                landMark.setLat(locationObject.getDouble("lat"));
+                                landMark.setLng(locationObject.getDouble("lng"));
+                                landMark.setPlaceId(resultObject.getString("place_id"));
+                                landMarks.add(landMark);
+
+                            }
+
+                            Log.i("place-id",resultObject.getString("place_id"));
+                        }
+
+
+                       // Coordinate driverCooord = new Coordinate();
+
+                        getDriversInMyLocation(landMarks);
+
+                    }
+                }
+                catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            @Override
+            public void fail(String error) {
+
+            }
+        });
+    }
+
+
+    public void showRiderInLocation(LandMark landMark)
+    {
+        mMap.addMarker(new MarkerOptions().position(new LatLng(landMark.getLat(),landMark.getLng())).draggable(true).snippet("Please move the marker if needed.").icon(BitmapDescriptorFactory.fromResource(R.drawable.placeholder)));
+
+    }
+
+    public void drawDrivePath(String points,LatLng origin,LatLng dest)
+    {
+        mMap.clear();
+        PolylineOptions polylines,polylineBlck;
+        List<LatLng> latLngs;
+        latLngs = PolyUtil.decode(points);
+        polylines = new PolylineOptions()
+                .addAll(latLngs)
+                .color(getResources().getColor(R.color.pathColor))
+                .width(8)
+                .endCap(new SquareCap()).startCap(new ButtCap());
+
+        polylineBlck = new PolylineOptions()
+
+                .color(Color.BLACK)
+                .width(8)
+                .endCap(new SquareCap()).startCap(new ButtCap());
+
+
+        Polyline polyline = mMap.addPolyline(polylines);
+
+        Log.i("polylines",polyline.getPoints().size()+"");
+
+        LatLngBounds.Builder builder = new LatLngBounds.Builder();
+        for(int i=0;i<latLngs.size();i++)
+        {
+            builder.include(latLngs.get(i));
+        }
+
+
+        //mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLngTO, 10.50f),2000,null);
+        mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 200),2500,null);
+
+        // mMap.setInfoWindowAdapter(new MapInfoWindowAdapter(MapsActivity.this));
+
+        MarkerOptions markerOptions = new MarkerOptions().position(origin).snippet("gggggggg").infoWindowAnchor(0.1f, 0.2f);
+
+        MarkerOptions markerOptionsFromLocat = new MarkerOptions().position(dest).snippet("gggggggg").infoWindowAnchor(-3.5f, 0.9f);
+
+
+
+
+        //mMap.addMarker(markerOptions);
+
+
+       // Marker markerFromLocate = mMap.addMarker(markerOptionsFromLocat);
+        //markerFromLocate.showInfoWindow();
+
+
+        mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
+            @Override
+            public void onInfoWindowClick(Marker marker) {
+                mMap.clear();
+                startActivityForResult(intent, 2);
+            }
+        });
+
     }
 
 }

@@ -20,15 +20,30 @@ import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
+import com.firebase.ui.auth.AuthUI;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.Query;
+import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.iid.FirebaseInstanceId;
 import com.google.firebase.iid.InstanceIdResult;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+
+import advancenji.teetech.com.dankkyrider2.helper.PlayerConfig;
+import advancenji.teetech.com.dankkyrider2.model.SharedValues;
+import advancenji.teetech.com.dankkyrider2.model.User;
 
 public class MainActivity extends AppCompatActivity implements NavigationView.OnNavigationItemSelectedListener {
 
@@ -36,14 +51,49 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private static final String TAG = "MainActivity";
     public final static String CHANNEL_ID = "Dinkky_001";
 
+    public FirebaseUser firebaseUser;
+
+    public DatabaseReference databaseReference;
+    private User user;
+    TextView username;
+    private FirebaseAuth auth;
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
+        auth = FirebaseAuth.getInstance();
+        auth.getCurrentUser();
+        databaseReference = FirebaseDatabase.getInstance().getReference();
+
+
+
+        Query data = databaseReference.child("dinkky").child("Customers").child(SharedValues.getValue(MainActivity.this,PlayerConfig.SHARED_KEY_USERID));
+        data.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+
+                if(dataSnapshot.exists())
+                {
+                    user = dataSnapshot.getValue(User.class);
+                    username = findViewById(R.id.userName);
+                    username.setText(user.getName());
+
+                }
+
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+                Log.i("error",databaseError.getMessage());
+            }
+        });
+
+        DrawerLayout drawer = findViewById(R.id.drawer_layout);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
         drawer.addDrawerListener(toggle);
@@ -131,6 +181,12 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             // Handle the camera action
         } else if (id == R.id.nav_logout) {
 
+            auth.signOut();
+            Intent intent = new Intent(this,LoginActivity.class);
+            startActivity(intent);
+
+            finish();
+
         } else if (id == R.id.nav_sendParcel) {
 
         } else if (id == R.id.nav_requestBike) {
@@ -149,6 +205,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         drawer.closeDrawer(GravityCompat.START);
         return true;
     }
+
 
     private void createNotificationChannel() {
         // Create the NotificationChannel, but only on API 26+ because

@@ -103,7 +103,7 @@
     </FrameLayout>
 
     <FrameLayout
-        android:id="@+id/skip"
+
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
@@ -113,6 +113,7 @@
         android:layout_marginTop="8dp"
         android:paddingLeft="5dp"
         android:paddingRight="5dp"
+        android:clickable="true"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -120,6 +121,7 @@
         app:layout_constraintVertical_bias="0.07999998">
 
         <RelativeLayout
+            android:id="@+id/riderAccount"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center_vertical|center_horizontal"

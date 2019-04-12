@@ -34,6 +34,7 @@ public class OnBoardingActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 OnBoardingActivity.this.startActivity(new Intent(OnBoardingActivity.this,AccountsActivity.class));
+                finish();
             }
         });
     }

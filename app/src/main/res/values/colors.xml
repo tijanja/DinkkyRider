@@ -4,6 +4,7 @@
     <color name="colorPrimaryDark">#ff6105 </color>
     <color name="colorAccent">#d50a0a</color>
     <color name="rider1">#ffffff</color>
+    <color name="pathColor">#353434</color>
 
     <integer-array name="advance3_glyph_colors">
         <item>@color/rider1</item>
